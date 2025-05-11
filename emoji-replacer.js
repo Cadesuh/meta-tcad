@@ -185,137 +185,65 @@
   "🤝": "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/People/Handshake.png"
 };
 
-// Classe principal do substituidor de emojis
-  class EmojiReplacer {
-    constructor() {
-      this.observer = new MutationObserver(this.handleMutations.bind(this));
-      this.init();
-    }
 
-    init() {
-      // Começa a observar mudanças no DOM
-      this.observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        characterData: true
-      });
-
-      // Processa o conteúdo inicial
-      this.replaceEmojis(document.body);
-      
-      // Adiciona listener para inputs em tempo real
-      document.addEventListener('input', this.handleInput.bind(this));
-    }
-
-    handleMutations(mutations) {
-      mutations.forEach(mutation => {
-        mutation.addedNodes.forEach(node => {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            this.replaceEmojis(node);
-          } else if (node.nodeType === Node.TEXT_NODE && node.parentNode) {
-            this.processTextNode(node);
-          }
-        });
-      });
-    }
-
-    handleInput(event) {
-      if (event.target.isContentEditable || 
-          ['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
-        this.replaceEmojis(event.target);
-      }
-    }
-
-    replaceEmojis(element) {
-      // Ignora elementos que não devem ser processados
-      if (element.tagName === 'SCRIPT' || element.tagName === 'STYLE') {
-        return;
-      }
-
-      // Processa todos os nós de texto
-      const walker = document.createTreeWalker(
-        element,
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
-      );
-
-      let node;
-      while (node = walker.nextNode()) {
-        this.processTextNode(node);
-      }
-    }
-
-    processTextNode(textNode) {
-      const parent = textNode.parentNode;
-      if (!parent || parent._emojiProcessed) return;
-
-      const text = textNode.nodeValue;
-      const emojiRegex = this.getEmojiRegex();
-      let newContent = document.createDocumentFragment();
-      let lastIndex = 0;
-      let match;
-
-      while ((match = emojiRegex.exec(text)) !== null) {
-        const emoji = match[0];
-        
-        // Adiciona texto antes do emoji
-        if (match.index > lastIndex) {
-          newContent.appendChild(
-            document.createTextNode(text.substring(lastIndex, match.index))
-          );
+  function replaceInTextNode(textNode) {
+    if (!textNode.nodeValue || !textNode.parentNode) return;
+    
+    const text = textNode.nodeValue;
+    let newContent = document.createDocumentFragment();
+    let lastPos = 0;
+    
+    Array.from(text).forEach((char, index) => {
+      if (emojiMap[char]) {
+        if (index > lastPos) {
+          newContent.appendChild(document.createTextNode(text.slice(lastPos, index)));
         }
-
-        // Adiciona imagem do emoji
-        if (emojiMap[emoji]) {
-          const img = this.createEmojiImage(emoji);
-          newContent.appendChild(img);
-        } else {
-          // Mantém o emoji original se não houver imagem
-          newContent.appendChild(document.createTextNode(emoji));
-        }
-
-        lastIndex = emojiRegex.lastIndex;
+        const img = document.createElement('img');
+        img.src = emojiMap[char];
+        img.alt = char;
+        img.className = 'emoji-replacement';
+        newContent.appendChild(img);
+        lastPos = index + 1;
       }
-
-      // Adiciona texto restante
-      if (lastIndex < text.length) {
-        newContent.appendChild(
-          document.createTextNode(text.substring(lastIndex))
-        );
-      }
-
-      // Substitui o nó se encontrou emojis
-      if (newContent.children.length > 0) {
-        parent.replaceChild(newContent, textNode);
-        parent._emojiProcessed = true;
-      }
+    });
+    
+    if (lastPos < text.length) {
+      newContent.appendChild(document.createTextNode(text.slice(lastPos)));
     }
-
-    createEmojiImage(emoji) {
-      const img = document.createElement('img');
-      img.src = emojiMap[emoji];
-      img.alt = emoji;
-      img.className = 'emoji-replacement';
-      img.style.height = '1em';
-      img.style.verticalAlign = 'middle';
-      img.style.margin = '0 0.1em';
-      return img;
-    }
-
-    getEmojiRegex() {
-      // Regex melhorada para capturar mais emojis
-      return /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu;
+    
+    if (newContent.children.length > 0) {
+      textNode.parentNode.replaceChild(newContent, textNode);
     }
   }
 
-  // Inicia automaticamente quando o script é carregado
-  document.addEventListener('DOMContentLoaded', () => {
-    new EmojiReplacer();
+  function scanDOM(root = document.body) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node;
+    while (node = walker.nextNode()) {
+      replaceInTextNode(node);
+    }
+  }
+
+  // Inicia imediatamente para conteúdo existente
+  if (document.readyState !== 'loading') {
+    scanDOM();
+  } else {
+    document.addEventListener('DOMContentLoaded', () => scanDOM());
+  }
+
+  // Observa mudanças dinâmicas
+  new MutationObserver(mutations => {
+    mutations.forEach(mutation => {
+      mutation.addedNodes.forEach(node => {
+        if (node.nodeType === 1) scanDOM(node);
+      });
+    });
+  }).observe(document.body, { childList: true, subtree: true });
+
+  // Monitora inputs em tempo real
+  document.addEventListener('input', e => {
+    if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) {
+      scanDOM(e.target);
+    }
   });
-
-  // Inicia também se o script for carregado depois do DOMContentLoaded
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    new EmojiReplacer();
-  }
 })();
