@@ -1,5 +1,6 @@
-// emoji-replacer.js
-const emojiMap = {
+(function() {
+  // Mapeamento de emojis para imagens
+  const emojiMap = {
   "😀": "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Grinning%20Face.png",
   "😂": "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Face%20with%20Tears%20of%20Joy.png",
   "👀": "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/People/Eyes.png",
@@ -184,33 +185,137 @@ const emojiMap = {
   "🤝": "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/People/Handshake.png"
 };
 
-class EmojiReplacer {
-  constructor() {
-    this.observer = new MutationObserver(this.handleMutations.bind(this));
-    this.init();
-  }
+// Classe principal do substituidor de emojis
+  class EmojiReplacer {
+    constructor() {
+      this.observer = new MutationObserver(this.handleMutations.bind(this));
+      this.init();
+    }
 
-  init() {
-    this.observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-    document.addEventListener('DOMContentLoaded', () => this.replaceEmojis(document.body));
-  }
-
-  handleMutations(mutations) {
-    mutations.forEach(mutation => {
-      mutation.addedNodes.forEach(node => {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          this.replaceEmojis(node);
-        }
+    init() {
+      // Começa a observar mudanças no DOM
+      this.observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true
       });
-    });
+
+      // Processa o conteúdo inicial
+      this.replaceEmojis(document.body);
+      
+      // Adiciona listener para inputs em tempo real
+      document.addEventListener('input', this.handleInput.bind(this));
+    }
+
+    handleMutations(mutations) {
+      mutations.forEach(mutation => {
+        mutation.addedNodes.forEach(node => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            this.replaceEmojis(node);
+          } else if (node.nodeType === Node.TEXT_NODE && node.parentNode) {
+            this.processTextNode(node);
+          }
+        });
+      });
+    }
+
+    handleInput(event) {
+      if (event.target.isContentEditable || 
+          ['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
+        this.replaceEmojis(event.target);
+      }
+    }
+
+    replaceEmojis(element) {
+      // Ignora elementos que não devem ser processados
+      if (element.tagName === 'SCRIPT' || element.tagName === 'STYLE') {
+        return;
+      }
+
+      // Processa todos os nós de texto
+      const walker = document.createTreeWalker(
+        element,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      );
+
+      let node;
+      while (node = walker.nextNode()) {
+        this.processTextNode(node);
+      }
+    }
+
+    processTextNode(textNode) {
+      const parent = textNode.parentNode;
+      if (!parent || parent._emojiProcessed) return;
+
+      const text = textNode.nodeValue;
+      const emojiRegex = this.getEmojiRegex();
+      let newContent = document.createDocumentFragment();
+      let lastIndex = 0;
+      let match;
+
+      while ((match = emojiRegex.exec(text)) !== null) {
+        const emoji = match[0];
+        
+        // Adiciona texto antes do emoji
+        if (match.index > lastIndex) {
+          newContent.appendChild(
+            document.createTextNode(text.substring(lastIndex, match.index))
+          );
+        }
+
+        // Adiciona imagem do emoji
+        if (emojiMap[emoji]) {
+          const img = this.createEmojiImage(emoji);
+          newContent.appendChild(img);
+        } else {
+          // Mantém o emoji original se não houver imagem
+          newContent.appendChild(document.createTextNode(emoji));
+        }
+
+        lastIndex = emojiRegex.lastIndex;
+      }
+
+      // Adiciona texto restante
+      if (lastIndex < text.length) {
+        newContent.appendChild(
+          document.createTextNode(text.substring(lastIndex))
+        );
+      }
+
+      // Substitui o nó se encontrou emojis
+      if (newContent.children.length > 0) {
+        parent.replaceChild(newContent, textNode);
+        parent._emojiProcessed = true;
+      }
+    }
+
+    createEmojiImage(emoji) {
+      const img = document.createElement('img');
+      img.src = emojiMap[emoji];
+      img.alt = emoji;
+      img.className = 'emoji-replacement';
+      img.style.height = '1em';
+      img.style.verticalAlign = 'middle';
+      img.style.margin = '0 0.1em';
+      return img;
+    }
+
+    getEmojiRegex() {
+      // Regex melhorada para capturar mais emojis
+      return /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu;
+    }
   }
 
-  replaceEmojis(element) {
-    // Implementação da substituição
-  }
-}
+  // Inicia automaticamente quando o script é carregado
+  document.addEventListener('DOMContentLoaded', () => {
+    new EmojiReplacer();
+  });
 
-new EmojiReplacer();
+  // Inicia também se o script for carregado depois do DOMContentLoaded
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    new EmojiReplacer();
+  }
+})();
